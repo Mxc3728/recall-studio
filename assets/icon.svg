@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Recall Studio">
+  <rect width="512" height="512" rx="92" fill="#f5f7f4"/>
+  <rect x="94" y="82" width="324" height="348" rx="46" fill="#ffffff" stroke="#b9cabb" stroke-width="14"/>
+  <rect x="136" y="134" width="46" height="244" rx="23" fill="#1f7a64"/>
+  <rect x="233" y="134" width="46" height="244" rx="23" fill="#efb84f"/>
+  <rect x="330" y="134" width="46" height="244" rx="23" fill="#c94f40"/>
+  <rect x="128" y="406" width="256" height="18" rx="9" fill="#dbe4dc"/>
+</svg>

@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#1f7a64">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="Recall Studio">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="description" content="A study app for hiding and revealing words or phrases from your own material.">
+    <title>Recall Studio</title>
+    <link rel="manifest" href="manifest.webmanifest">
+    <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <a class="brand" href="#" aria-label="Recall Studio">
+          <span class="brand-mark" aria-hidden="true">
+            <span></span>
+            <span></span>
+            <span></span>
+          </span>
+          <span>Recall Studio</span>
+        </a>
+
+        <div class="topbar-actions">
+          <span class="save-state" id="saveState">Saved locally</span>
+          <button class="icon-button install-button" id="installButton" type="button" title="Install app" aria-label="Install app" hidden>
+            <svg aria-hidden="true" viewBox="0 0 24 24">
+              <path d="M12 3v12"></path>
+              <path d="m7 10 5 5 5-5"></path>
+              <path d="M5 21h14"></path>
+            </svg>
+          </button>
+          <button class="icon-button" id="newButton" type="button" title="New set" aria-label="New set">
+            <svg aria-hidden="true" viewBox="0 0 24 24">
+              <path d="M12 5v14M5 12h14"></path>
+            </svg>
+          </button>
+        </div>
+      </header>
+
+      <main class="layout">
+        <aside class="source-panel" aria-label="Material">
+          <div class="panel-head">
+            <label for="setTitle">Material</label>
+            <input id="setTitle" class="title-input" type="text" value="Untitled set" aria-label="Set name">
+          </div>
+
+          <textarea id="sourceInput" spellcheck="true" placeholder="Paste your study material here"></textarea>
+
+          <div class="button-row">
+            <button class="primary-button" id="buildButton" type="button">Use Material</button>
+            <button class="secondary-button" id="sampleButton" type="button">Sample</button>
+          </div>
+
+          <div class="settings-group" aria-label="Study options">
+            <div class="setting-line">
+              <span>Mask</span>
+              <div class="segmented" role="group" aria-label="Mask style">
+                <button class="segment active" type="button" data-mask-style="blur">Blur</button>
+                <button class="segment" type="button" data-mask-style="blank">Blank</button>
+                <button class="segment" type="button" data-mask-style="hint">Hint</button>
+              </div>
+            </div>
+          </div>
+        </aside>
+
+        <section class="workspace" aria-label="Study workspace">
+          <div class="workspace-toolbar">
+            <div class="segmented mode-switch" role="group" aria-label="Mode">
+              <button class="segment active" id="editModeButton" type="button" data-mode="edit">Mark</button>
+              <button class="segment" id="studyModeButton" type="button" data-mode="study">Study</button>
+            </div>
+
+            <div class="tool-buttons">
+              <button class="tool-button" id="hideAllButton" type="button" title="Hide all" aria-label="Hide all">
+                <svg aria-hidden="true" viewBox="0 0 24 24">
+                  <path d="M3 3l18 18"></path>
+                  <path d="M10.6 10.6A2 2 0 0 0 13.4 13.4"></path>
+                  <path d="M9.9 5.1A9.5 9.5 0 0 1 12 5c5 0 8.5 4 10 7a13.2 13.2 0 0 1-3.1 4.2"></path>
+                  <path d="M6.6 6.6A13.4 13.4 0 0 0 2 12c1.5 3 5 7 10 7a9.7 9.7 0 0 0 4.4-1"></path>
+                </svg>
+              </button>
+              <button class="tool-button" id="revealAllButton" type="button" title="Reveal all" aria-label="Reveal all">
+                <svg aria-hidden="true" viewBox="0 0 24 24">
+                  <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"></path>
+                  <circle cx="12" cy="12" r="3"></circle>
+                </svg>
+              </button>
+              <button class="tool-button danger" id="clearMasksButton" type="button" title="Clear masks" aria-label="Clear masks">
+                <svg aria-hidden="true" viewBox="0 0 24 24">
+                  <path d="M3 6h18"></path>
+                  <path d="M8 6V4h8v2"></path>
+                  <path d="M19 6l-1 14H6L5 6"></path>
+                  <path d="M10 11v5"></path>
+                  <path d="M14 11v5"></path>
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          <div class="stats-strip" aria-label="Stats">
+            <span><strong id="wordCount">0</strong> words</span>
+            <span><strong id="hiddenCount">0</strong> hidden</span>
+            <span><strong id="groupCount">0</strong> chunks</span>
+          </div>
+
+          <article class="study-surface" id="studySurface" aria-live="polite"></article>
+        </section>
+      </main>
+    </div>
+
+    <script src="app.js"></script>
+  </body>
+</html>
