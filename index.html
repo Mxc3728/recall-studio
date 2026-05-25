@@ -12,7 +12,7 @@
     <link rel="manifest" href="manifest.webmanifest">
     <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
     <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
-    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="styles.css?v=3">
   </head>
   <body>
     <div class="app-shell">
@@ -54,7 +54,16 @@
 
           <div class="button-row">
             <button class="primary-button" id="buildButton" type="button">Use Material</button>
+            <button class="secondary-button" id="saveSetButton" type="button">Save</button>
             <button class="secondary-button" id="sampleButton" type="button">Sample</button>
+          </div>
+
+          <div class="library-panel" aria-label="Saved materials">
+            <div class="library-head">
+              <span>Saved</span>
+              <span id="savedCount">0</span>
+            </div>
+            <div class="saved-list" id="savedList"></div>
           </div>
 
           <div class="settings-group" aria-label="Study options">
@@ -114,6 +123,6 @@
       </main>
     </div>
 
-    <script src="app.js"></script>
+    <script src="app.js?v=3"></script>
   </body>
 </html>

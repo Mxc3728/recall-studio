@@ -1,14 +1,18 @@
 const storageKey = "recall-studio-state-v1";
+const libraryKey = "recall-studio-library-v1";
 const sampleMaterial = `Photosynthesis converts light energy into chemical energy. In plants, chlorophyll captures sunlight inside the chloroplasts. Carbon dioxide and water are transformed into glucose and oxygen through a sequence of reactions.`;
 
 const elements = {
   sourceInput: document.querySelector("#sourceInput"),
   setTitle: document.querySelector("#setTitle"),
   buildButton: document.querySelector("#buildButton"),
+  saveSetButton: document.querySelector("#saveSetButton"),
   sampleButton: document.querySelector("#sampleButton"),
   newButton: document.querySelector("#newButton"),
   installButton: document.querySelector("#installButton"),
   saveState: document.querySelector("#saveState"),
+  savedCount: document.querySelector("#savedCount"),
+  savedList: document.querySelector("#savedList"),
   studySurface: document.querySelector("#studySurface"),
   wordCount: document.querySelector("#wordCount"),
   hiddenCount: document.querySelector("#hiddenCount"),
@@ -21,6 +25,7 @@ const elements = {
 };
 
 const initialState = {
+  activeSetId: null,
   title: "Untitled set",
   source: "",
   tokens: [],
@@ -30,6 +35,7 @@ const initialState = {
 };
 
 let state = loadState();
+let library = loadLibrary();
 let dragState = null;
 let saveTimer = null;
 let installPrompt = null;
@@ -49,6 +55,27 @@ function loadState() {
   } catch {
     return { ...initialState };
   }
+}
+
+function loadLibrary() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(libraryKey));
+    if (!Array.isArray(saved)) return [];
+
+    return saved
+      .filter((set) => set && set.id && typeof set.source === "string")
+      .map((set) => ({
+        ...set,
+        tokens: Array.isArray(set.tokens) ? set.tokens : tokenize(set.source),
+        groups: Array.isArray(set.groups) ? set.groups : [],
+      }));
+  } catch {
+    return [];
+  }
+}
+
+function saveLibrary() {
+  localStorage.setItem(libraryKey, JSON.stringify(library));
 }
 
 function saveState() {
@@ -73,6 +100,18 @@ function tokenize(text) {
 
 function makeGroupId() {
   return `group-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function makeSetId() {
+  return `set-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function getTokenText(tokens = state.tokens) {
+  return tokens.map((token) => token.text).join("");
+}
+
+function getWordCount(tokens = state.tokens) {
+  return tokens.filter((token) => token.type === "word").length;
 }
 
 function getWordIndicesBetween(start, end) {
@@ -102,6 +141,99 @@ function rebuildGroupRanges(groups = state.groups) {
       };
     })
     .filter((group) => group.wordIds.length > 0);
+}
+
+function applySourceFromInputs() {
+  const source = elements.sourceInput.value.trim();
+  const title = elements.setTitle.value.trim() || "Untitled set";
+  const sourceChanged = source !== getTokenText();
+
+  state.title = title;
+  state.source = source;
+
+  if (sourceChanged) {
+    state.tokens = tokenize(source);
+    state.groups = [];
+    state.mode = "edit";
+  }
+
+  state.groups = rebuildGroupRanges();
+}
+
+function createSetSnapshot(id, existingSet) {
+  const now = new Date().toISOString();
+
+  return {
+    id,
+    title: state.title,
+    source: state.source,
+    tokens: state.tokens,
+    groups: state.groups.map((group) => ({ ...group, revealed: false })),
+    maskStyle: state.maskStyle,
+    createdAt: existingSet?.createdAt || now,
+    updatedAt: now,
+  };
+}
+
+function saveCurrentSet() {
+  applySourceFromInputs();
+
+  if (!state.source) {
+    elements.saveState.textContent = "Add material first";
+    render();
+    return;
+  }
+
+  const existingSet = library.find((set) => set.id === state.activeSetId);
+  const id = existingSet?.id || state.activeSetId || makeSetId();
+  const snapshot = createSetSnapshot(id, existingSet);
+
+  if (existingSet) {
+    library = library.map((set) => (set.id === id ? snapshot : set));
+  } else {
+    library = [snapshot, ...library];
+  }
+
+  state.activeSetId = id;
+  saveLibrary();
+  saveState();
+  elements.saveState.textContent = "Saved material";
+  render();
+}
+
+function openSavedSet(id) {
+  const savedSet = library.find((set) => set.id === id);
+  if (!savedSet) return;
+
+  state = {
+    ...initialState,
+    activeSetId: savedSet.id,
+    title: savedSet.title,
+    source: savedSet.source,
+    tokens: Array.isArray(savedSet.tokens) ? savedSet.tokens : tokenize(savedSet.source),
+    groups: rebuildGroupRanges((savedSet.groups || []).map((group) => ({ ...group, revealed: false }))),
+    mode: savedSet.groups?.length ? "study" : "edit",
+    maskStyle: savedSet.maskStyle || state.maskStyle || "blur",
+  };
+
+  saveState();
+  render();
+}
+
+function deleteSavedSet(id) {
+  const savedSet = library.find((set) => set.id === id);
+  if (!savedSet) return;
+
+  if (!window.confirm(`Delete "${savedSet.title}"?`)) return;
+
+  library = library.filter((set) => set.id !== id);
+  if (state.activeSetId === id) {
+    state.activeSetId = null;
+  }
+
+  saveLibrary();
+  saveState();
+  render();
 }
 
 function maskRange(start, end) {
@@ -292,13 +424,71 @@ function renderEmptyState() {
 }
 
 function renderStats() {
-  const wordCount = state.tokens.filter((token) => token.type === "word").length;
+  const wordCount = getWordCount();
   const hiddenWords = new Set();
   state.groups.forEach((group) => group.wordIds.forEach((wordId) => hiddenWords.add(wordId)));
 
   elements.wordCount.textContent = wordCount;
   elements.hiddenCount.textContent = hiddenWords.size;
   elements.groupCount.textContent = state.groups.length;
+}
+
+function createTrashIcon() {
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("aria-hidden", "true");
+  svg.setAttribute("viewBox", "0 0 24 24");
+
+  ["M3 6h18", "M8 6V4h8v2", "M19 6l-1 14H6L5 6", "M10 11v5", "M14 11v5"].forEach((d) => {
+    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    path.setAttribute("d", d);
+    svg.append(path);
+  });
+
+  return svg;
+}
+
+function renderSavedMaterials() {
+  elements.savedCount.textContent = library.length;
+  elements.savedList.replaceChildren();
+
+  if (!library.length) {
+    const empty = document.createElement("div");
+    empty.className = "saved-empty";
+    empty.textContent = "No saved materials";
+    elements.savedList.append(empty);
+    return;
+  }
+
+  library.forEach((savedSet) => {
+    const item = document.createElement("div");
+    item.className = "saved-item";
+    item.classList.toggle("active", savedSet.id === state.activeSetId);
+
+    const openButton = document.createElement("button");
+    openButton.type = "button";
+    openButton.className = "saved-open";
+    openButton.dataset.openSetId = savedSet.id;
+
+    const title = document.createElement("span");
+    title.className = "saved-title";
+    title.textContent = savedSet.title || "Untitled set";
+
+    const meta = document.createElement("span");
+    meta.className = "saved-meta";
+    meta.textContent = `${getWordCount(savedSet.tokens)} words · ${(savedSet.groups || []).length} chunks`;
+
+    const deleteButton = document.createElement("button");
+    deleteButton.type = "button";
+    deleteButton.className = "saved-delete";
+    deleteButton.dataset.deleteSetId = savedSet.id;
+    deleteButton.setAttribute("aria-label", `Delete ${savedSet.title || "saved material"}`);
+    deleteButton.title = "Delete";
+    deleteButton.append(createTrashIcon());
+
+    openButton.append(title, meta);
+    item.append(openButton, deleteButton);
+    elements.savedList.append(item);
+  });
 }
 
 function renderControls() {
@@ -314,12 +504,14 @@ function renderControls() {
   elements.sourceInput.value = state.source;
   elements.studySurface.classList.toggle("mode-edit", state.mode === "edit");
   elements.studySurface.classList.toggle("mode-study", state.mode === "study");
+  elements.saveSetButton.textContent = state.activeSetId ? "Update" : "Save";
 }
 
 function render() {
   state.groups = rebuildGroupRanges();
   elements.studySurface.replaceChildren();
   renderControls();
+  renderSavedMaterials();
   renderStats();
 
   if (!state.tokens.length) {
@@ -456,7 +648,9 @@ function wireInstallPrompt() {
 }
 
 elements.buildButton.addEventListener("click", buildFromSource);
+elements.saveSetButton.addEventListener("click", saveCurrentSet);
 elements.sampleButton.addEventListener("click", () => {
+  state.activeSetId = null;
   elements.sourceInput.value = sampleMaterial;
   elements.setTitle.value = "Photosynthesis";
   buildFromSource();
@@ -482,6 +676,19 @@ elements.setTitle.addEventListener("input", () => {
 elements.sourceInput.addEventListener("input", () => {
   state.source = elements.sourceInput.value;
   saveState();
+});
+
+elements.savedList.addEventListener("click", (event) => {
+  const deleteButton = event.target.closest?.("[data-delete-set-id]");
+  if (deleteButton) {
+    deleteSavedSet(deleteButton.dataset.deleteSetId);
+    return;
+  }
+
+  const openButton = event.target.closest?.("[data-open-set-id]");
+  if (openButton) {
+    openSavedSet(openButton.dataset.openSetId);
+  }
 });
 
 elements.studySurface.addEventListener("pointerdown", onPointerDown);

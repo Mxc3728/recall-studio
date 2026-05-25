@@ -1,9 +1,9 @@
-const cacheName = "recall-studio-v2";
+const cacheName = "recall-studio-v3";
 const appShell = [
   "./",
   "./index.html",
-  "./styles.css",
-  "./app.js",
+  "./styles.css?v=3",
+  "./app.js?v=3",
   "./manifest.webmanifest",
   "./assets/icon.svg",
   "./assets/icon-192.png",

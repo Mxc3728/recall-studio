@@ -201,7 +201,7 @@ textarea::placeholder {
 
 .button-row {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: 1fr auto auto;
   gap: 10px;
 }
 
@@ -247,6 +247,129 @@ textarea::placeholder {
 .settings-group {
   padding-top: 6px;
   border-top: 1px solid var(--line);
+}
+
+.library-panel {
+  display: grid;
+  gap: 10px;
+  padding-top: 6px;
+  border-top: 1px solid var(--line);
+}
+
+.library-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.library-head span:first-child {
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.library-head span:last-child {
+  min-width: 28px;
+  min-height: 26px;
+  display: inline-grid;
+  place-items: center;
+  padding: 2px 8px;
+  color: var(--green-dark);
+  background: var(--cyan-soft);
+  border-radius: var(--radius);
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.saved-list {
+  display: grid;
+  gap: 8px;
+  max-height: 280px;
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.saved-empty {
+  min-height: 44px;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  background: var(--panel-strong);
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius);
+  font-size: 0.9rem;
+}
+
+.saved-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 42px;
+  gap: 6px;
+  align-items: stretch;
+  padding: 5px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.saved-item.active {
+  border-color: rgba(31, 122, 100, 0.52);
+  background: rgba(223, 247, 245, 0.58);
+}
+
+.saved-open,
+.saved-delete {
+  border-radius: 6px;
+  background: transparent;
+}
+
+.saved-open {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+  padding: 7px 8px;
+  color: var(--ink);
+  text-align: left;
+}
+
+.saved-open:hover,
+.saved-delete:hover {
+  background: var(--panel-strong);
+}
+
+.saved-title,
+.saved-meta {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.saved-title {
+  font-weight: 800;
+}
+
+.saved-meta {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.saved-delete {
+  display: inline-grid;
+  place-items: center;
+  color: var(--coral);
+}
+
+.saved-delete svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
 }
 
 .setting-line {
