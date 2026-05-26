@@ -81,10 +81,13 @@ function loadState() {
       return { ...initialState };
     }
 
+    const fallbackColor = getMarkColorKey(saved.markColor);
+
     return {
       ...initialState,
       ...saved,
-      groups: saved.groups.map((group) => ({ revealed: false, ...group })),
+      markColor: fallbackColor,
+      groups: saved.groups.map((group) => normalizeGroup(group, fallbackColor)),
     };
   } catch {
     return { ...initialState };
@@ -101,7 +104,8 @@ function loadLibrary() {
       .map((set) => ({
         ...set,
         tokens: Array.isArray(set.tokens) ? set.tokens : tokenize(set.source),
-        groups: Array.isArray(set.groups) ? set.groups : [],
+        markColor: getMarkColorKey(set.markColor),
+        groups: Array.isArray(set.groups) ? set.groups.map((group) => normalizeGroup(group, set.markColor)) : [],
       }));
   } catch {
     return [];
@@ -140,6 +144,31 @@ function makeSetId() {
   return `set-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+function getMarkColorKey(markColor) {
+  return markColors[markColor] ? markColor : "amber";
+}
+
+function getMarkColorStyles(markColor) {
+  return markColors[getMarkColorKey(markColor)];
+}
+
+function applyMarkColorStyles(element, markColor) {
+  const color = getMarkColorStyles(markColor);
+
+  element.style.setProperty("--mark-bg", color.bg);
+  element.style.setProperty("--mark-border", color.border);
+  element.style.setProperty("--mark-text", color.text);
+  element.style.setProperty("--mark-revealed", color.revealed);
+}
+
+function normalizeGroup(group, fallbackColor = "amber") {
+  return {
+    revealed: false,
+    ...group,
+    markColor: getMarkColorKey(group?.markColor || group?.color || fallbackColor),
+  };
+}
+
 function getTokenText(tokens = state.tokens) {
   return tokens.map((token) => token.text).join("");
 }
@@ -168,7 +197,7 @@ function rebuildGroupRanges(groups = state.groups) {
       const sortedIds = [...group.wordIds].sort((a, b) => a - b);
 
       return {
-        ...group,
+        ...normalizeGroup(group),
         wordIds: sortedIds,
         start: sortedIds[0],
         end: sortedIds[sortedIds.length - 1],
@@ -246,10 +275,10 @@ function openSavedSet(id) {
     title: savedSet.title,
     source: savedSet.source,
     tokens: Array.isArray(savedSet.tokens) ? savedSet.tokens : tokenize(savedSet.source),
-    groups: rebuildGroupRanges((savedSet.groups || []).map((group) => ({ ...group, revealed: false }))),
+    groups: rebuildGroupRanges((savedSet.groups || []).map((group) => normalizeGroup(group, savedSet.markColor))),
     mode: savedSet.groups?.length ? "study" : "edit",
     maskStyle: savedSet.maskStyle || state.maskStyle || "blur",
-    markColor: savedSet.markColor || "amber",
+    markColor: getMarkColorKey(savedSet.markColor),
   };
 
   saveState();
@@ -293,6 +322,7 @@ function maskRange(start, end) {
   state.groups.push({
     id: makeGroupId(),
     wordIds: [...mergedWordIds].sort((a, b) => a - b),
+    markColor: state.markColor,
     revealed: false,
   });
   state.groups = rebuildGroupRanges();
@@ -309,6 +339,7 @@ function toggleSingleWord(tokenId) {
     state.groups.push({
       id: makeGroupId(),
       wordIds: [tokenId],
+      markColor: state.markColor,
       revealed: false,
     });
   }
@@ -382,6 +413,7 @@ function createWordToken(token, group) {
   if (group) {
     span.classList.add("is-masked");
     span.dataset.groupId = group.id;
+    applyMarkColorStyles(span, group.markColor);
   }
 
   return span;
@@ -411,6 +443,7 @@ function createStudyGroup(group) {
   button.className = `mask-group ${hidden ? "is-hidden" : "is-revealed"}`;
   button.dataset.groupId = group.id;
   button.dataset.style = state.maskStyle;
+  applyMarkColorStyles(button, group.markColor);
   button.setAttribute("aria-label", hidden ? "Reveal chunk" : "Hide chunk");
 
   if (!hidden) {
@@ -536,7 +569,7 @@ function renderSavedMaterials() {
 }
 
 function renderControls() {
-  const markColor = markColors[state.markColor] || markColors.amber;
+  state.markColor = getMarkColorKey(state.markColor);
 
   elements.modeButtons.forEach((button) => {
     button.classList.toggle("active", button.dataset.mode === state.mode);
@@ -552,10 +585,7 @@ function renderControls() {
 
   elements.setTitle.value = state.title;
   elements.sourceInput.value = state.source;
-  elements.studySurface.style.setProperty("--mark-bg", markColor.bg);
-  elements.studySurface.style.setProperty("--mark-border", markColor.border);
-  elements.studySurface.style.setProperty("--mark-text", markColor.text);
-  elements.studySurface.style.setProperty("--mark-revealed", markColor.revealed);
+  applyMarkColorStyles(elements.studySurface, state.markColor);
   elements.studySurface.classList.toggle("mode-edit", state.mode === "edit");
   elements.studySurface.classList.toggle("mode-study", state.mode === "study");
   elements.saveSetButton.textContent = state.activeSetId ? "Update" : "Save";
