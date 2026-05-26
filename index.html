@@ -12,7 +12,7 @@
     <link rel="manifest" href="manifest.webmanifest">
     <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
     <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
-    <link rel="stylesheet" href="styles.css?v=3">
+    <link rel="stylesheet" href="styles.css?v=4">
   </head>
   <body>
     <div class="app-shell">
@@ -67,6 +67,17 @@
           </div>
 
           <div class="settings-group" aria-label="Study options">
+            <div class="setting-line">
+              <span>Color</span>
+              <div class="swatch-row" role="group" aria-label="Mark color">
+                <button class="color-swatch amber active" type="button" data-mark-color="amber" title="Amber" aria-label="Amber"></button>
+                <button class="color-swatch mint" type="button" data-mark-color="mint" title="Mint" aria-label="Mint"></button>
+                <button class="color-swatch sky" type="button" data-mark-color="sky" title="Sky" aria-label="Sky"></button>
+                <button class="color-swatch rose" type="button" data-mark-color="rose" title="Rose" aria-label="Rose"></button>
+                <button class="color-swatch graphite" type="button" data-mark-color="graphite" title="Graphite" aria-label="Graphite"></button>
+              </div>
+            </div>
+
             <div class="setting-line">
               <span>Mask</span>
               <div class="segmented" role="group" aria-label="Mask style">
@@ -123,6 +134,6 @@
       </main>
     </div>
 
-    <script src="app.js?v=3"></script>
+    <script src="app.js?v=4"></script>
   </body>
 </html>

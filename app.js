@@ -1,6 +1,38 @@
 const storageKey = "recall-studio-state-v1";
 const libraryKey = "recall-studio-library-v1";
 const sampleMaterial = `Photosynthesis converts light energy into chemical energy. In plants, chlorophyll captures sunlight inside the chloroplasts. Carbon dioxide and water are transformed into glucose and oxygen through a sequence of reactions.`;
+const markColors = {
+  amber: {
+    bg: "#fff1c7",
+    border: "rgba(239, 184, 79, 0.72)",
+    text: "#6f4b00",
+    revealed: "rgba(239, 184, 79, 0.16)",
+  },
+  mint: {
+    bg: "#dff7f5",
+    border: "rgba(31, 122, 100, 0.62)",
+    text: "#155743",
+    revealed: "rgba(31, 122, 100, 0.1)",
+  },
+  sky: {
+    bg: "#ddeeff",
+    border: "rgba(76, 127, 176, 0.62)",
+    text: "#234f78",
+    revealed: "rgba(76, 127, 176, 0.12)",
+  },
+  rose: {
+    bg: "#ffe3dc",
+    border: "rgba(201, 79, 64, 0.62)",
+    text: "#8f2f25",
+    revealed: "rgba(201, 79, 64, 0.12)",
+  },
+  graphite: {
+    bg: "#e8ebe6",
+    border: "rgba(99, 112, 103, 0.58)",
+    text: "#3a433d",
+    revealed: "rgba(99, 112, 103, 0.12)",
+  },
+};
 
 const elements = {
   sourceInput: document.querySelector("#sourceInput"),
@@ -22,6 +54,7 @@ const elements = {
   clearMasksButton: document.querySelector("#clearMasksButton"),
   modeButtons: document.querySelectorAll("[data-mode]"),
   maskStyleButtons: document.querySelectorAll("[data-mask-style]"),
+  markColorButtons: document.querySelectorAll("[data-mark-color]"),
 };
 
 const initialState = {
@@ -32,6 +65,7 @@ const initialState = {
   groups: [],
   mode: "edit",
   maskStyle: "blur",
+  markColor: "amber",
 };
 
 let state = loadState();
@@ -170,6 +204,7 @@ function createSetSnapshot(id, existingSet) {
     tokens: state.tokens,
     groups: state.groups.map((group) => ({ ...group, revealed: false })),
     maskStyle: state.maskStyle,
+    markColor: state.markColor,
     createdAt: existingSet?.createdAt || now,
     updatedAt: now,
   };
@@ -214,6 +249,7 @@ function openSavedSet(id) {
     groups: rebuildGroupRanges((savedSet.groups || []).map((group) => ({ ...group, revealed: false }))),
     mode: savedSet.groups?.length ? "study" : "edit",
     maskStyle: savedSet.maskStyle || state.maskStyle || "blur",
+    markColor: savedSet.markColor || "amber",
   };
 
   saveState();
@@ -309,6 +345,14 @@ function setMode(mode) {
 
 function setMaskStyle(maskStyle) {
   state.maskStyle = maskStyle;
+  saveState();
+  render();
+}
+
+function setMarkColor(markColor) {
+  if (!markColors[markColor]) return;
+
+  state.markColor = markColor;
   saveState();
   render();
 }
@@ -492,6 +536,8 @@ function renderSavedMaterials() {
 }
 
 function renderControls() {
+  const markColor = markColors[state.markColor] || markColors.amber;
+
   elements.modeButtons.forEach((button) => {
     button.classList.toggle("active", button.dataset.mode === state.mode);
   });
@@ -500,8 +546,16 @@ function renderControls() {
     button.classList.toggle("active", button.dataset.maskStyle === state.maskStyle);
   });
 
+  elements.markColorButtons.forEach((button) => {
+    button.classList.toggle("active", button.dataset.markColor === state.markColor);
+  });
+
   elements.setTitle.value = state.title;
   elements.sourceInput.value = state.source;
+  elements.studySurface.style.setProperty("--mark-bg", markColor.bg);
+  elements.studySurface.style.setProperty("--mark-border", markColor.border);
+  elements.studySurface.style.setProperty("--mark-text", markColor.text);
+  elements.studySurface.style.setProperty("--mark-revealed", markColor.revealed);
   elements.studySurface.classList.toggle("mode-edit", state.mode === "edit");
   elements.studySurface.classList.toggle("mode-study", state.mode === "study");
   elements.saveSetButton.textContent = state.activeSetId ? "Update" : "Save";
@@ -666,6 +720,10 @@ elements.modeButtons.forEach((button) => {
 
 elements.maskStyleButtons.forEach((button) => {
   button.addEventListener("click", () => setMaskStyle(button.dataset.maskStyle));
+});
+
+elements.markColorButtons.forEach((button) => {
+  button.addEventListener("click", () => setMarkColor(button.dataset.markColor));
 });
 
 elements.setTitle.addEventListener("input", () => {
