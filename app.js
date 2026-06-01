@@ -1,5 +1,6 @@
 const storageKey = "recall-studio-state-v1";
 const libraryKey = "recall-studio-library-v1";
+const serviceWorkerSkipWaitingMessage = "SKIP_WAITING";
 const sampleMaterial = `Photosynthesis converts light energy into chemical energy. In plants, chlorophyll captures sunlight inside the chloroplasts. Carbon dioxide and water are transformed into glucose and oxygen through a sequence of reactions.`;
 const markColors = {
   amber: {
@@ -31,6 +32,23 @@ const markColors = {
     border: "rgba(99, 112, 103, 0.58)",
     text: "#3a433d",
     revealed: "rgba(99, 112, 103, 0.12)",
+  },
+};
+const testTypes = ["easy", "medium", "hard"];
+const testTypeLabels = {
+  easy: "Easy",
+  medium: "Medium",
+  hard: "Hard",
+};
+const testMatchThreshold = 0.97;
+const testDifficultySettings = {
+  easy: {
+    ratio: 0.3,
+    maxPerSentence: 4,
+  },
+  medium: {
+    ratio: 0.9,
+    maxPerSentence: Number.POSITIVE_INFINITY,
   },
 };
 
@@ -66,6 +84,10 @@ const initialState = {
   mode: "edit",
   maskStyle: "blur",
   markColor: "amber",
+  testType: "easy",
+  testItems: [],
+  testHardAnswer: "",
+  testHardResult: null,
 };
 
 let state = loadState();
@@ -82,11 +104,16 @@ function loadState() {
     }
 
     const fallbackColor = getMarkColorKey(saved.markColor);
+    const testType = getTestTypeKey(saved.testType);
 
     return {
       ...initialState,
       ...saved,
       markColor: fallbackColor,
+      testType,
+      testItems: saved.testType === testType && Array.isArray(saved.testItems) ? saved.testItems : [],
+      testHardAnswer: typeof saved.testHardAnswer === "string" ? saved.testHardAnswer : "",
+      testHardResult: typeof saved.testHardResult === "boolean" ? saved.testHardResult : null,
       groups: saved.groups.map((group) => normalizeGroup(group, fallbackColor)),
     };
   } catch {
@@ -148,6 +175,11 @@ function getMarkColorKey(markColor) {
   return markColors[markColor] ? markColor : "amber";
 }
 
+function getTestTypeKey(testType) {
+  if (testType === "random") return "easy";
+  return testTypes.includes(testType) ? testType : "easy";
+}
+
 function getMarkColorStyles(markColor) {
   return markColors[getMarkColorKey(markColor)];
 }
@@ -175,6 +207,55 @@ function getTokenText(tokens = state.tokens) {
 
 function getWordCount(tokens = state.tokens) {
   return tokens.filter((token) => token.type === "word").length;
+}
+
+function normalizeTestText(text) {
+  return String(text ?? "")
+    .replace(/\r\n?/g, "\n")
+    .replace(/[ \t]*\n+[ \t]*/g, " ")
+    .trim()
+    .toLowerCase();
+}
+
+function isWithinEditLimit(expected, actual, maxDistance) {
+  if (Math.abs(expected.length - actual.length) > maxDistance) return false;
+
+  let previous = new Array(actual.length + 1).fill(0).map((_, index) => index);
+
+  for (let expectedIndex = 1; expectedIndex <= expected.length; expectedIndex += 1) {
+    const current = new Array(actual.length + 1).fill(maxDistance + 1);
+    current[0] = expectedIndex;
+    const minActualIndex = Math.max(1, expectedIndex - maxDistance);
+    const maxActualIndex = Math.min(actual.length, expectedIndex + maxDistance);
+    let bestInRow = current[0];
+
+    for (let actualIndex = minActualIndex; actualIndex <= maxActualIndex; actualIndex += 1) {
+      const cost = expected[expectedIndex - 1] === actual[actualIndex - 1] ? 0 : 1;
+      current[actualIndex] = Math.min(
+        previous[actualIndex] + 1,
+        current[actualIndex - 1] + 1,
+        previous[actualIndex - 1] + cost,
+      );
+      bestInRow = Math.min(bestInRow, current[actualIndex]);
+    }
+
+    if (bestInRow > maxDistance) return false;
+    previous = current;
+  }
+
+  return previous[actual.length] <= maxDistance;
+}
+
+function isTestMatch(expected, actual) {
+  const normalizedExpected = normalizeTestText(expected);
+  const normalizedActual = normalizeTestText(actual);
+  if (normalizedExpected === normalizedActual) return true;
+
+  const maxLength = Math.max(normalizedExpected.length, normalizedActual.length);
+  if (!maxLength) return true;
+
+  const maxDistance = Math.floor(maxLength * (1 - testMatchThreshold));
+  return isWithinEditLimit(normalizedExpected, normalizedActual, maxDistance);
 }
 
 function getWordIndicesBetween(start, end) {
@@ -218,6 +299,7 @@ function applySourceFromInputs() {
     state.tokens = tokenize(source);
     state.groups = [];
     state.mode = "edit";
+    resetTestSession();
   }
 
   state.groups = rebuildGroupRanges();
@@ -279,6 +361,10 @@ function openSavedSet(id) {
     mode: savedSet.groups?.length ? "study" : "edit",
     maskStyle: savedSet.maskStyle || state.maskStyle || "blur",
     markColor: getMarkColorKey(savedSet.markColor),
+    testType: "easy",
+    testItems: [],
+    testHardAnswer: "",
+    testHardResult: null,
   };
 
   saveState();
@@ -326,6 +412,7 @@ function maskRange(start, end) {
     revealed: false,
   });
   state.groups = rebuildGroupRanges();
+  resetTestSession();
   saveState();
   render();
 }
@@ -345,6 +432,7 @@ function toggleSingleWord(tokenId) {
   }
 
   state.groups = rebuildGroupRanges();
+  resetTestSession();
   saveState();
   render();
 }
@@ -359,6 +447,10 @@ function buildFromSource() {
     tokens: tokenize(source),
     groups: [],
     mode: "edit",
+    testType: "easy",
+    testItems: [],
+    testHardAnswer: "",
+    testHardResult: null,
   };
 
   saveState();
@@ -369,6 +461,8 @@ function setMode(mode) {
   state.mode = mode;
   if (mode === "study") {
     state.groups = state.groups.map((group) => ({ ...group, revealed: false }));
+  } else if (mode === "test") {
+    prepareTestMode();
   }
   saveState();
   render();
@@ -396,8 +490,16 @@ function setAllRevealed(revealed) {
 
 function clearMasks() {
   state.groups = [];
+  resetTestSession();
   saveState();
   render();
+}
+
+function resetTestSession(testType = state.testType || "easy") {
+  state.testType = getTestTypeKey(testType);
+  state.testItems = [];
+  state.testHardAnswer = "";
+  state.testHardResult = null;
 }
 
 function createTextNode(text) {
@@ -457,6 +559,282 @@ function createStudyGroup(group) {
   }
 
   return button;
+}
+
+function getBlankableTestCandidates() {
+  if (state.groups.length) {
+    return state.groups.map((group) => ({
+      id: group.id,
+      start: group.start,
+      end: group.end,
+      answer: getGroupText(group),
+    }));
+  }
+
+  return state.tokens
+    .filter((token) => token.type === "word")
+    .map((token) => ({
+      id: `token-${token.id}`,
+      start: token.id,
+      end: token.id,
+      answer: token.text,
+    }));
+}
+
+function getSentenceRanges() {
+  const ranges = [];
+  let sentenceStart = 0;
+  let hasContent = false;
+
+  state.tokens.forEach((token, index) => {
+    if (token.type !== "space") {
+      hasContent = true;
+    }
+
+    if (hasContent && /[.!?]/u.test(token.text)) {
+      ranges.push({ start: sentenceStart, end: index });
+      sentenceStart = index + 1;
+      hasContent = false;
+    }
+  });
+
+  if (state.tokens.slice(sentenceStart).some((token) => token.type !== "space")) {
+    ranges.push({ start: sentenceStart, end: state.tokens.length - 1 });
+  }
+
+  return ranges.length ? ranges : [{ start: 0, end: state.tokens.length - 1 }];
+}
+
+function getTestCandidateBuckets(candidates) {
+  return getSentenceRanges()
+    .map((sentence) =>
+      candidates.filter((candidate) => candidate.start >= sentence.start && candidate.start <= sentence.end),
+    )
+    .filter((bucket) => bucket.length);
+}
+
+function shuffleItems(items) {
+  const shuffled = [...items];
+
+  for (let index = shuffled.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(Math.random() * (index + 1));
+    [shuffled[index], shuffled[swapIndex]] = [shuffled[swapIndex], shuffled[index]];
+  }
+
+  return shuffled;
+}
+
+function getBlankCountForBucket(bucket, testType) {
+  const settings = testDifficultySettings[testType] || testDifficultySettings.easy;
+  const ratioCount = Math.max(1, Math.round(bucket.length * settings.ratio));
+  const visibleReserve = testType === "medium" && bucket.length > 1 ? 1 : 0;
+  const maxCount = Math.min(settings.maxPerSentence, bucket.length - visibleReserve);
+
+  return Math.max(1, Math.min(bucket.length, ratioCount, maxCount));
+}
+
+function buildDifficultyTest(testType = state.testType) {
+  const normalizedType = getTestTypeKey(testType);
+  const candidates = getBlankableTestCandidates();
+  const selectedItems = getTestCandidateBuckets(candidates).flatMap((bucket) =>
+    shuffleItems(bucket).slice(0, getBlankCountForBucket(bucket, normalizedType)),
+  );
+
+  state.testType = normalizedType;
+  state.testHardAnswer = "";
+  state.testHardResult = null;
+  state.testItems = selectedItems
+    .sort((a, b) => a.start - b.start)
+    .map((item, index) => ({
+      ...item,
+      id: `${item.id}-${index}`,
+      userAnswer: "",
+      correct: null,
+    }));
+}
+
+function prepareTestMode() {
+  state.testType = getTestTypeKey(state.testType);
+
+  if (state.testType === "hard") {
+    state.testHardResult = null;
+    return;
+  }
+
+  if (!state.testItems.length) {
+    buildDifficultyTest(state.testType);
+  }
+}
+
+function setTestType(testType) {
+  resetTestSession(testType);
+
+  if (state.testType !== "hard") {
+    buildDifficultyTest(state.testType);
+  }
+
+  saveState();
+  render();
+}
+
+function newTest() {
+  resetTestSession(state.testType);
+
+  if (state.testType !== "hard") {
+    buildDifficultyTest(state.testType);
+  }
+
+  saveState();
+  render();
+}
+
+function checkTest() {
+  if (state.testType === "hard") {
+    state.testHardResult = isTestMatch(state.source, state.testHardAnswer);
+    saveState();
+    render();
+    return;
+  }
+
+  state.testItems = state.testItems.map((item) => ({
+    ...item,
+    correct: isTestMatch(item.answer, item.userAnswer),
+  }));
+  saveState();
+  render();
+}
+
+function renderTestToolbar() {
+  const toolbar = document.createElement("div");
+  toolbar.className = "test-toolbar";
+
+  const typeSwitch = document.createElement("div");
+  typeSwitch.className = "segmented test-type-switch";
+  typeSwitch.setAttribute("role", "group");
+  typeSwitch.setAttribute("aria-label", "Test type");
+
+  testTypes.forEach((testType) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "segment";
+    button.classList.toggle("active", state.testType === testType);
+    button.dataset.testType = testType;
+    button.textContent = testTypeLabels[testType];
+    typeSwitch.append(button);
+  });
+
+  const actions = document.createElement("div");
+  actions.className = "test-actions";
+
+  const newButton = document.createElement("button");
+  newButton.type = "button";
+  newButton.className = "secondary-button";
+  newButton.dataset.testAction = "new";
+  newButton.textContent = "New Test";
+
+  const checkButton = document.createElement("button");
+  checkButton.type = "button";
+  checkButton.className = "primary-button";
+  checkButton.dataset.testAction = "check";
+  checkButton.textContent = "Check";
+
+  actions.append(newButton, checkButton);
+  toolbar.append(typeSwitch, actions);
+  return toolbar;
+}
+
+function renderTestSummary(fragment) {
+  if (state.testType === "hard" && state.testHardResult === null) return;
+  if (state.testType !== "hard" && state.testItems.every((item) => item.correct === null)) return;
+
+  const summary = document.createElement("div");
+  summary.className = "test-summary";
+
+  if (state.testType === "hard") {
+    summary.classList.toggle("correct", state.testHardResult === true);
+    summary.classList.toggle("wrong", state.testHardResult === false);
+    summary.textContent = state.testHardResult ? "Correct" : "Not yet";
+  } else {
+    const correctCount = state.testItems.filter((item) => item.correct).length;
+    summary.textContent = `${correctCount} / ${state.testItems.length} correct`;
+  }
+
+  fragment.append(summary);
+}
+
+function createBlankInput(item, index) {
+  const input = document.createElement("input");
+  input.className = "blank-input";
+  input.type = "text";
+  input.value = item.userAnswer || "";
+  input.dataset.testBlankId = item.id;
+  input.setAttribute("aria-label", `Blank ${index + 1}`);
+  input.style.setProperty("--blank-size", `${Math.min(Math.max(item.answer.length + 1, 6), 24)}ch`);
+
+  if (item.correct !== null) {
+    input.classList.toggle("correct", item.correct);
+    input.classList.toggle("wrong", !item.correct);
+  }
+
+  return input;
+}
+
+function renderDifficultyTest(fragment) {
+  if (!state.testItems.length) {
+    buildDifficultyTest(state.testType);
+  }
+
+  const passage = document.createElement("div");
+  passage.className = "test-passage";
+  const blanksByStart = new Map(state.testItems.map((item, index) => [item.start, { item, index }]));
+  let index = 0;
+
+  while (index < state.tokens.length) {
+    const blank = blanksByStart.get(index);
+
+    if (blank) {
+      passage.append(createBlankInput(blank.item, blank.index));
+      index = blank.item.end + 1;
+      continue;
+    }
+
+    passage.append(createTextNode(state.tokens[index].text));
+    index += 1;
+  }
+
+  fragment.append(passage);
+}
+
+function renderHardTest(fragment) {
+  const answer = document.createElement("textarea");
+  answer.className = "hard-answer";
+  answer.value = state.testHardAnswer || "";
+  answer.dataset.hardAnswer = "true";
+  answer.spellcheck = false;
+  answer.setAttribute("aria-label", "Hard mode answer");
+  answer.placeholder = "Full answer";
+
+  if (state.testHardResult !== null) {
+    answer.classList.toggle("correct", state.testHardResult === true);
+    answer.classList.toggle("wrong", state.testHardResult === false);
+  }
+
+  fragment.append(answer);
+}
+
+function renderTestSurface(fragment) {
+  const panel = document.createElement("div");
+  panel.className = "test-panel";
+  panel.append(renderTestToolbar());
+  renderTestSummary(panel);
+
+  if (state.testType === "hard") {
+    renderHardTest(panel);
+  } else {
+    renderDifficultyTest(panel);
+  }
+
+  fragment.append(panel);
 }
 
 function renderEditSurface(fragment) {
@@ -570,6 +948,7 @@ function renderSavedMaterials() {
 
 function renderControls() {
   state.markColor = getMarkColorKey(state.markColor);
+  state.testType = getTestTypeKey(state.testType);
 
   elements.modeButtons.forEach((button) => {
     button.classList.toggle("active", button.dataset.mode === state.mode);
@@ -585,6 +964,8 @@ function renderControls() {
 
   elements.setTitle.value = state.title;
   elements.sourceInput.value = state.source;
+  elements.sourceInput.hidden = state.mode === "test";
+  elements.sourceInput.disabled = state.mode === "test";
   applyMarkColorStyles(elements.studySurface, state.markColor);
   elements.studySurface.classList.toggle("mode-edit", state.mode === "edit");
   elements.studySurface.classList.toggle("mode-study", state.mode === "study");
@@ -607,6 +988,8 @@ function render() {
 
   if (state.mode === "study") {
     renderStudySurface(fragment);
+  } else if (state.mode === "test") {
+    renderTestSurface(fragment);
   } else {
     renderEditSurface(fragment);
   }
@@ -678,6 +1061,25 @@ function onPointerUp() {
 }
 
 function onSurfaceClick(event) {
+  if (state.mode === "test") {
+    const typeButton = event.target.closest?.("[data-test-type]");
+    if (typeButton) {
+      setTestType(typeButton.dataset.testType);
+      return;
+    }
+
+    const actionButton = event.target.closest?.("[data-test-action]");
+    if (actionButton?.dataset.testAction === "new") {
+      newTest();
+      return;
+    }
+
+    if (actionButton?.dataset.testAction === "check") {
+      checkTest();
+      return;
+    }
+  }
+
   if (state.mode !== "study") return;
 
   const groupElement = event.target.closest?.(".mask-group");
@@ -702,8 +1104,37 @@ function startNewSet() {
 function registerServiceWorker() {
   if (!("serviceWorker" in navigator) || window.location.protocol === "file:") return;
 
+  let refreshing = false;
+
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (refreshing) return;
+
+    refreshing = true;
+    window.location.reload();
+  });
+
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("./service-worker.js").catch(() => {});
+    navigator.serviceWorker
+      .register("./service-worker.js")
+      .then((registration) => {
+        registration.update();
+
+        if (registration.waiting) {
+          registration.waiting.postMessage({ type: serviceWorkerSkipWaitingMessage });
+        }
+
+        registration.addEventListener("updatefound", () => {
+          const worker = registration.installing;
+          if (!worker) return;
+
+          worker.addEventListener("statechange", () => {
+            if (worker.state === "installed" && navigator.serviceWorker.controller) {
+              worker.postMessage({ type: serviceWorkerSkipWaitingMessage });
+            }
+          });
+        });
+      })
+      .catch(() => {});
   });
 }
 
@@ -776,6 +1207,24 @@ elements.savedList.addEventListener("click", (event) => {
   const openButton = event.target.closest?.("[data-open-set-id]");
   if (openButton) {
     openSavedSet(openButton.dataset.openSetId);
+  }
+});
+
+elements.studySurface.addEventListener("input", (event) => {
+  const blankInput = event.target.closest?.("[data-test-blank-id]");
+  if (blankInput) {
+    state.testItems = state.testItems.map((item) =>
+      item.id === blankInput.dataset.testBlankId ? { ...item, userAnswer: blankInput.value, correct: null } : item,
+    );
+    saveState();
+    return;
+  }
+
+  const hardAnswer = event.target.closest?.("[data-hard-answer]");
+  if (hardAnswer) {
+    state.testHardAnswer = hardAnswer.value;
+    state.testHardResult = null;
+    saveState();
   }
 });
 

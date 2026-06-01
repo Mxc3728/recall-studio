@@ -477,7 +477,7 @@ textarea::placeholder {
 }
 
 .mode-switch {
-  width: min(300px, 100%);
+  width: min(390px, 100%);
 }
 
 .tool-buttons,
@@ -637,6 +637,93 @@ textarea::placeholder {
   border-color: var(--mark-border);
 }
 
+.test-panel {
+  display: grid;
+  gap: 18px;
+}
+
+.test-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.test-type-switch {
+  width: min(330px, 100%);
+}
+
+.test-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.test-passage {
+  white-space: pre-wrap;
+}
+
+.blank-input {
+  width: var(--blank-size);
+  min-width: 6ch;
+  max-width: min(100%, 24ch);
+  min-height: 38px;
+  margin: 0 3px;
+  padding: 4px 8px;
+  color: var(--ink);
+  background: var(--panel);
+  border: 2px solid var(--line-strong);
+  border-radius: 6px;
+  font-weight: 800;
+  vertical-align: baseline;
+}
+
+.blank-input.correct,
+.hard-answer.correct {
+  border-color: var(--green);
+  background: var(--cyan-soft);
+}
+
+.blank-input.wrong,
+.hard-answer.wrong {
+  border-color: var(--coral);
+  background: var(--coral-soft);
+}
+
+.hard-answer {
+  min-height: 360px;
+  resize: vertical;
+  padding: 16px;
+  line-height: 1.7;
+}
+
+.test-summary {
+  width: fit-content;
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 11px;
+  color: var(--muted);
+  background: var(--panel-strong);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  font-size: 0.9rem;
+  font-weight: 800;
+}
+
+.test-summary.correct {
+  color: var(--green-dark);
+  background: var(--cyan-soft);
+  border-color: rgba(31, 122, 100, 0.3);
+}
+
+.test-summary.wrong {
+  color: var(--coral);
+  background: var(--coral-soft);
+  border-color: rgba(201, 79, 64, 0.3);
+}
+
 @media (max-width: 920px) {
   .topbar {
     height: auto;
@@ -675,7 +762,16 @@ textarea::placeholder {
     flex-direction: column;
   }
 
+  .test-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
   .mode-switch {
+    width: 100%;
+  }
+
+  .test-type-switch {
     width: 100%;
   }
 
@@ -688,6 +784,11 @@ textarea::placeholder {
   }
 
   .button-row {
+    grid-template-columns: 1fr;
+  }
+
+  .test-actions {
+    display: grid;
     grid-template-columns: 1fr;
   }
 }
